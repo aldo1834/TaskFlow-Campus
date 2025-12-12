@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TaskList Perkuliahan — Frontend Project</title>
+  <meta name="description" content="TaskList Perkuliahan: catat tugas mata kuliah, dosen, deadline realtime, dan arsip minggu sebelumnya.">
+  <style>
+    /* ----------------------
+       STYLE UTAMA (CSS)
+       ---------------------- */
+    :root{
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --muted:#6b7280;
+      --accent:#2563eb; /* biru */
+      --danger:#ef4444;
+      --success:#16a34a;
+      --glass: rgba(255,255,255,0.6);
+      --radius:12px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    [data-theme="dark"]{
+      --bg: #0b1220;
+      --card: #0f1724;
+      --muted:#9ca3af;
+      --accent:#60a5fa;
+      --glass: rgba(255,255,255,0.03);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#e9eefb 120%);}
+    .app{
+      max-width:980px;margin:28px auto;padding:20px;backdrop-filter: blur(6px);
+    }
+
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{font-size:20px;margin:0}
+    .sub{color:var(--muted);font-size:13px}
+
+    .controls{display:flex;gap:8px;align-items:center}
+    .btn{background:var(--card);padding:8px 12px;border-radius:10px;cursor:pointer;border:1px solid rgba(0,0,0,0.04)}
+    .btn.primary{background:linear-gradient(90deg,var(--accent),#1d4ed8);color:white;border:none}
+
+    .layout{display:grid;grid-template-columns:360px 1fr;gap:18px;margin-top:18px}
+
+    /* Form input */
+    .card{background:var(--card);border-radius:var(--radius);padding:14px;box-shadow:0 6px 18px rgba(16,24,40,0.06)}
+    .field{display:flex;flex-direction:column;margin-bottom:10px}
+    label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    input[type="text"], input[type="date"], select, textarea{padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent}
+    .row{display:flex;gap:8px}
+
+    /* List */
+    .list{display:flex;flex-direction:column;gap:8px}
+    .task{
+      display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.04)
+    }
+    .task .left{display:flex;gap:12px;align-items:center}
+    .chip{font-size:12px;padding:6px 8px;border-radius:999px;background:var(--glass);}
+    .title{font-weight:600}
+    .meta{font-size:12px;color:var(--muted)}
+
+    .actions{display:flex;gap:6px}
+    .icon-btn{padding:6px;border-radius:8px;border:1px solid rgba(0,0,0,0.04);background:transparent;cursor:pointer}
+
+    .muted{color:var(--muted)}
+
+    /* Riwayat */
+    .history-list .task{opacity:0.9}
+
+    /* Responsive */
+    @media (max-width:880px){
+      .layout{grid-template-columns:1fr;}
+    }
+    /* small touches */
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div>
+        <h1>TaskList Perkuliahan</h1>
+        <div class="sub">Catat dan kelola semua tugas mata kuliah Anda — tanpa backend (LocalStorage)</div>
+      </div>
+      <div class="controls">
+        <div class="sub" id="stats">0 tugas aktif</div>
+        <button class="btn" id="toggleTheme">Toggle Theme</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- SIDEBAR: FORM INPUT + FILTER -->
+      <aside>
+        <div class="card">
+          <h3 style="margin-top:0">Tambah Tugas</h3>
+          <div class="field">
+            <label for="taskName">Nama Tugas</label>
+            <input id="taskName" type="text" placeholder="Contoh: Praktikum Algoritma" />
+          </div>
+          <div class="field">
+            <label for="course">Mata Kuliah</label>
+            <input id="course" type="text" placeholder="Contoh: Algoritma & Struktur Data" />
+          </div>
+          <div class="row">
+            <div class="field" style="flex:1">
+              <label for="deadline">Deadline</label>
+              <input id="deadline" type="date" />
+            </div>
+            <div class="field" style="width:120px">
+              <label for="priority">Prioritas</label>
+              <select id="priority">
+                <option value="normal">Normal</option>
+                <option value="high">Tinggi</option>
+                <option value="low">Rendah</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="note">Keterangan (opsional)</label>
+            <textarea id="note" rows="3" placeholder="Catatan singkat..."></textarea>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" id="clearForm">Bersihkan</button>
+            <button class="btn primary" id="addTask">Tambah</button>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card">
+          <h4 style="margin:0 0 8px 0">Filter & Cari</h4>
+          <div class="field">
+            <label for="filterCourse">Filter Mata Kuliah</label>
+            <select id="filterCourse">
+              <option value="">-- Semua --</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="search">Pencarian Nama Tugas</label>
+            <input id="search" type="text" placeholder="Cari..." />
+          </div>
+          <div style="display:flex;gap:8px;justify-content:space-between;margin-top:6px">
+            <button class="btn" id="clearCompleted">Hapus Selesai</button>
+            <button class="btn" id="exportBtn">Simpan ke File</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- KONTEN UTAMA: DAFTAR TUGAS + RIWAYAT -->
+      <section>
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <h3 style="margin:0">Daftar Tugas</h3>
+            <div class="muted">Urut berdasarkan deadline</div>
+          </div>
+
+          <div style="height:12px"></div>
+
+          <div id="taskList" class="list" aria-live="polite"></div>
+
+          <div style="height:10px"></div>
+
+          <div style="border-top:1px dashed rgba(0,0,0,0.04);padding-top:10px;margin-top:10px">
+            <h4 style="margin:0">Riwayat (Selesai)</h4>
+            <div class="history-list" id="historyList"></div>
+          </div>
+        </div>
+
+        <footer>
+          Tip: Gunakan filter dan pencarian untuk menemukan tugas lebih cepat. Data tersimpan lokal di browser Anda.
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    /* ---------------------
+       SCRIPT JS: LOGIKA APLIKASI
+       --------------------- */
+
+    // Key localStorage
+    const STORAGE_KEY = 'tasklist-perkuliahan:v1';
+
+    // State in-memory
+    let tasks = [];
+
+    // Elemen UI
+    const taskName = document.getElementById('taskName');
+    const course = document.getElementById('course');
+    const deadline = document.getElementById('deadline');
+    const priority = document.getElementById('priority');
+    const note = document.getElementById('note');
+    const addTaskBtn = document.getElementById('addTask');
+    const clearFormBtn = document.getElementById('clearForm');
+    const taskList = document.getElementById('taskList');
+    const historyList = document.getElementById('historyList');
+    const stats = document.getElementById('stats');
+    const filterCourse = document.getElementById('filterCourse');
+    const searchInput = document.getElementById('search');
+    const clearCompletedBtn = document.getElementById('clearCompleted');
+    const exportBtn = document.getElementById('exportBtn');
+    const toggleTheme = document.getElementById('toggleTheme');
+
+    // Initialize app
+    init();
+
+    function init(){
+      load();
+      bindEvents();
+      render();
+      // set default date to today for convenience
+      deadline.valueAsDate = new Date();
+      // theme
+      const currentTheme = localStorage.getItem('tasklist-theme');
+      if(currentTheme === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    }
+
+    function bindEvents(){
+      addTaskBtn.addEventListener('click', onAddTask);
+      clearFormBtn.addEventListener('click', clearForm);
+      filterCourse.addEventListener('change', render);
+      searchInput.addEventListener('input', render);
+      clearCompletedBtn.addEventListener('click', clearCompleted);
+      exportBtn.addEventListener('click', exportToFile);
+      toggleTheme.addEventListener('click', toggleThemeMode);
+    }
+
+    function onAddTask(){
+      const name = taskName.value.trim();
+      const courseName = course.value.trim();
+      const dl = deadline.value;
+      const pr = priority.value;
+      const nt = note.value.trim();
+
+      if(!name || !courseName || !dl){
+        alert('Nama tugas, mata kuliah, dan deadline harus diisi.');
+        return;
+      }
+
+      const id = Date.now().toString();
+      const createdAt = new Date().toISOString();
+
+      const task = {
+        id, name, course: courseName, deadline: dl, priority: pr, note: nt, done:false, createdAt
+      };
+
+      tasks.push(task);
+      save();
+      render();
+      clearForm();
+    }
+
+    function clearForm(){
+      taskName.value = '';
+      course.value = '';
+      // keep today's date
+      deadline.valueAsDate = new Date();
+      priority.value = 'normal';
+      note.value = '';
+    }
+
+    function render(){
+      // prepare filters
+      const courseFilter = filterCourse.value;
+      const search = searchInput.value.trim().toLowerCase();
+
+      // split tasks
+      const active = tasks.filter(t => !t.done);
+      const done = tasks.filter(t => t.done);
+
+      // populate filterCourse select
+      populateCourseOptions();
+
+      // sort by deadline ascending
+      active.sort((a,b)=> new Date(a.deadline)-new Date(b.deadline));
+      done.sort((a,b)=> new Date(b.completedAt || b.createdAt)-new Date(a.completedAt || a.createdAt));
+
+      // render active list
+      taskList.innerHTML = '';
+      const filteredActive = active.filter(t=>{
+        if(courseFilter && t.course !== courseFilter) return false;
+        if(search && !t.name.toLowerCase().includes(search) && !t.course.toLowerCase().includes(search)) return false;
+        return true;
+      });
+
+      if(filteredActive.length === 0){
+        const p = document.createElement('div');
+        p.className = 'muted';
+        p.textContent = 'Tidak ada tugas.';
+        taskList.appendChild(p);
+      } else {
+        filteredActive.forEach(renderTaskCard);
+      }
+
+      // render history
+      historyList.innerHTML = '';
+      if(done.length === 0){
+        const p = document.createElement('div'); p.className='muted'; p.textContent='Belum ada tugas selesai.'; historyList.appendChild(p);
+      } else {
+        done.forEach(renderHistoryCard);
+      }
+
+      // stats
+      stats.textContent = `${active.length} tugas aktif • ${done.length} selesai`;
+    }
+
+    function renderTaskCard(task){
+      const card = document.createElement('div');
+      card.className = 'task';
+
+      const left = document.createElement('div'); left.className = 'left';
+      const c = document.createElement('div'); c.className='chip'; c.textContent = task.course;
+      const info = document.createElement('div');
+      const title = document.createElement('div'); title.className='title'; title.textContent = task.name;
+      const meta = document.createElement('div'); meta.className='meta';
+      meta.innerHTML = `Deadline: ${formatDate(task.deadline)} • Prioritas: ${capitalize(task.priority)}`;
+      info.appendChild(title); info.appendChild(meta);
+      left.appendChild(c); left.appendChild(info);
+
+      const actions = document.createElement('div'); actions.className='actions';
+
+      const btnDone = document.createElement('button'); btnDone.className='icon-btn'; btnDone.title='Tandai selesai';
+      btnDone.textContent = '✓'; btnDone.onclick = ()=> toggleDone(task.id);
+
+      const btnEdit = document.createElement('button'); btnEdit.className='icon-btn'; btnEdit.title='Edit (inline)';
+      btnEdit.textContent = '✎'; btnEdit.onclick = ()=> editTaskInline(task.id);
+
+      const btnDelete = document.createElement('button'); btnDelete.className='icon-btn'; btnDelete.title='Hapus';
+      btnDelete.textContent = '🗑'; btnDelete.onclick = ()=> deleteTask(task.id);
+
+      actions.appendChild(btnDone); actions.appendChild(btnEdit); actions.appendChild(btnDelete);
+
+      card.appendChild(left); card.appendChild(actions);
+      taskList.appendChild(card);
+    }
+
+    function renderHistoryCard(task){
+      const card = document.createElement('div'); card.className='task';
+      const left = document.createElement('div'); left.className='left';
+      const c = document.createElement('div'); c.className='chip'; c.textContent = task.course;
+      const info = document.createElement('div');
+      const title = document.createElement('div'); title.className='title'; title.textContent = task.name + ' (selesai)';
+      const meta = document.createElement('div'); meta.className='meta';
+      meta.innerHTML = `Deadline: ${formatDate(task.deadline)} • Selesai: ${task.completedAt ? formatDateTime(task.completedAt) : '-'} `;
+      info.appendChild(title); info.appendChild(meta);
+      left.appendChild(c); left.appendChild(info);
+
+      const actions = document.createElement('div'); actions.className='actions';
+      const btnUndo = document.createElement('button'); btnUndo.className='icon-btn'; btnUndo.textContent='↺'; btnUndo.title='Batal selesai'; btnUndo.onclick = ()=> undoDone(task.id);
+      const btnDelete = document.createElement('button'); btnDelete.className='icon-btn'; btnDelete.textContent='🗑'; btnDelete.title='Hapus'; btnDelete.onclick = ()=> deleteTask(task.id);
+      actions.appendChild(btnUndo); actions.appendChild(btnDelete);
+
+      card.appendChild(left); card.appendChild(actions);
+      historyList.appendChild(card);
+    }
+
+    function editTaskInline(id){
+      // find task and prompt for quick edit (simple implementation)
+      const t = tasks.find(x=>x.id===id);
+      if(!t) return;
+      const newName = prompt('Edit nama tugas:', t.name);
+      if(newName===null) return; // cancel
+      t.name = newName.trim() || t.name;
+      const newCourse = prompt('Edit mata kuliah:', t.course);
+      if(newCourse!==null) t.course = newCourse.trim() || t.course;
+      const newDl = prompt('Edit deadline (YYYY-MM-DD):', t.deadline);
+      if(newDl!==null && newDl.trim()) t.deadline = newDl;
+      save(); render();
+    }
+
+    function toggleDone(id){
+      const t = tasks.find(x=>x.id===id); if(!t) return;
+      t.done = true; t.completedAt = new Date().toISOString();
+      save(); render();
+    }
+
+    function undoDone(id){
+      const t = tasks.find(x=>x.id===id); if(!t) return;
+      t.done = false; delete t.completedAt; save(); render();
+    }
+
+    function deleteTask(id){
+      if(!confirm('Yakin ingin menghapus tugas ini?')) return;
+      tasks = tasks.filter(x=>x.id!==id);
+      save(); render();
+    }
+
+    function clearCompleted(){
+      if(!confirm('Hapus semua tugas yang sudah selesai?')) return;
+      tasks = tasks.filter(x=>!x.done);
+      save(); render();
+    }
+
+    function populateCourseOptions(){
+      // collect unique course names from tasks
+      const courses = [...new Set(tasks.map(t=>t.course))].filter(Boolean).sort();
+      // clear and repop
+      const existing = Array.from(filterCourse.options).map(o=>o.value);
+      // only repopulate if changed
+      const values = ['','',...courses];
+      filterCourse.innerHTML = '';
+      const optAll = document.createElement('option'); optAll.value=''; optAll.textContent='-- Semua --'; filterCourse.appendChild(optAll);
+      courses.forEach(c=>{
+        const o = document.createElement('option'); o.value=c; o.textContent=c; filterCourse.appendChild(o);
+      });
+    }
+
+    function save(){
+      try{
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+      } catch(e){
+        console.error('Gagal menyimpan ke localStorage',e);
+      }
+    }
+
+    function load(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return;
+      try{
+        tasks = JSON.parse(raw);
+      } catch(e){
+        console.error('Gagal parse data localStorage',e); tasks = [];
+      }
+    }
+
+    function exportToFile(){
+      const data = JSON.stringify(tasks, null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='tasklist-perkuliahan.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    function formatDate(d){
+      if(!d) return '-';
+      const dt = new Date(d + (d.length===10 ? 'T00:00:00' : ''));
+      return dt.toLocaleDateString('id-ID', {year:'numeric',month:'short',day:'numeric'});
+    }
+    function formatDateTime(d){
+      if(!d) return '-';
+      const dt = new Date(d);
+      return dt.toLocaleString('id-ID', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+
+    function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1)}
+
+    function toggleThemeMode(){
+      const current = document.documentElement.getAttribute('data-theme');
+      if(current === 'dark'){
+        document.documentElement.removeAttribute('data-theme');
+        localStorage.removeItem('tasklist-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme','dark');
+        localStorage.setItem('tasklist-theme','dark');
+      }
+    }
+
+    // small accessibility: allow pressing Enter to submit when focus on fields
+    [taskName, course, deadline].forEach(el=>{
+      el.addEventListener('keydown', e=>{ if(e.key === 'Enter') onAddTask(); });
+    });
+
+    // end of script
+  </script>
+</body>
+</html>
